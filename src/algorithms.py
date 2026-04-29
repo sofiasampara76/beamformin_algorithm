@@ -36,8 +36,26 @@ class Beamformer:
         return spectrum
 
     def run_music(self, R, scan_angles, num_sources):
-        """MUSIC algorithm through eigenvalues"""
-        # 1. eigendecomposition: R = Vs*Ls*Vs^H + Vn*Ln*Vn^H
-        # 2. Extract noise subspace Vn
-        # 3. Pseudo-spectrum: 1 / (a^H * Vn * Vn^H * a)
-        pass
+        """
+        MUSIC (Multiple Signal Classification) algorithm.
+        
+        Steps:
+          1. Eigendecompose R: eigenvalues sorted ascending, eigenvectors as columns
+          2. Noise subspace Vn = eigenvectors corresponding to M - num_sources smallest eigenvalues
+          3. Pseudo-spectrum: P(theta) = 1 / (a^H * Vn * Vn^H * a)
+        """
+        M = R.shape[0]
+
+        eigenvalues, eigenvectors = np.linalg.eigh(R)
+
+        noise_dim = M - num_sources
+        Vn = eigenvectors[:, :noise_dim]
+        Vn_Vn_H = Vn @ Vn.conj().T
+
+        spectrum = np.zeros(len(scan_angles))
+        for i, angle in enumerate(scan_angles):
+            a = self.sim.get_steering_vector(angle)
+            denom = a.conj().T @ Vn_Vn_H @ a
+            spectrum[i] = 1.0 / (np.abs(denom.item()) + 1e-12)
+
+        return spectrum
