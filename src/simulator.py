@@ -25,13 +25,19 @@ class ULASimulator:
         a = np.exp(phase_shifts)
         return a.reshape(-1, 1)
 
-    def generate_signal(self, sources_theta, snr_db, n_snapshots):
+    def generate_signal(self, sources_theta, snr_db, n_snapshots, amplitudes=None):
         """
         sources_theta: the list of arrival angles (DoA)
         snr_db: the signal-to-noise ratio
         n_snapshots: the number of samples (N_samp)
+        amplitudes: the list of signal amplitudes (optional)
         """
         num_sources = len(sources_theta)
+
+        if amplitudes is None:
+            amplitudes = np.ones(num_sources)
+        elif len(amplitudes) != num_sources:
+            raise ValueError(f"Expected {num_sources} amplitudes, but got {len(amplitudes)}.")
 
         A = np.hstack([self.get_steering_vector(theta) for theta in sources_theta])
         S = (np.random.randn(num_sources, n_snapshots) +
