@@ -22,30 +22,37 @@ from src.simulator import ULASimulator
 from src.algorithms import Beamformer
 from src.metrics import calculate_rmse
 
-M            = 16
-fc           = 3e9
-TRUE_THETAS  = [10.0, 25.0]
+# ── Simulation parameters ──────────────────────────────────────────────────
+M            = 16          # number of antenna elements
+fc           = 3e9         # carrier frequency (3 GHz)
+TRUE_THETAS  = [10.0, 25.0]  # two source directions (degrees)
 NUM_SOURCES  = len(TRUE_THETAS)
 SCAN_ANGLES  = np.linspace(-90, 90, 1801)
-N_TRIALS     = 50
-SNR_RANGE        = np.arange(-10, 25, 5)
+N_TRIALS     = 50          # Monte-Carlo trials per point
+
+# Sweep ranges
+SNR_RANGE        = np.arange(-10, 25, 5)   # dB
 SNAPSHOTS_RANGE  = [16, 32, 64, 128, 256, 512, 1024]
 
-FIXED_SNR        = 10
-FIXED_SNAPSHOTS  = 256
+FIXED_SNR        = 10   # dB  (used in snapshot sweep)
+FIXED_SNAPSHOTS  = 256  #     (used in SNR sweep)
 
 
+# ── Helper: peak detection ─────────────────────────────────────────────────
 def find_peaks_sorted(spectrum, scan_angles, num_peaks):
     """Return `num_peaks` angle estimates by finding the largest spectrum peaks."""
     from scipy.signal import find_peaks as sp_find_peaks
     peaks_idx, _ = sp_find_peaks(spectrum, distance=10)
     if len(peaks_idx) == 0:
+        # Fallback: global maxima
         peaks_idx = np.argsort(spectrum)[-num_peaks:][::-1]
     else:
         peaks_idx = peaks_idx[np.argsort(spectrum[peaks_idx])[::-1]]
     peaks_idx = peaks_idx[:num_peaks]
     return np.sort(scan_angles[peaks_idx])
 
+
+# ── RMSE computation for one (snr, n_snapshots) point ─────────────────────
 def compute_rmse_point(snr_db, n_snapshots):
     sim = ULASimulator(M=M, fc=fc)
     bf  = Beamformer(sim)
@@ -66,12 +73,15 @@ def compute_rmse_point(snr_db, n_snapshots):
             (bf.run_music(R, SCAN_ANGLES, NUM_SOURCES), rmse_music),
         ]:
             estimates = find_peaks_sorted(spectrum, SCAN_ANGLES, NUM_SOURCES)
+            # per-source RMSE summed in quadrature then averaged
             rmse_list.append(np.sqrt(np.mean((estimates - true_arr) ** 2)))
 
     return (float(np.mean(rmse_das)),
             float(np.mean(rmse_mvdr)),
             float(np.mean(rmse_music)))
 
+
+# ── Experiment 1: RMSE vs SNR ─────────────────────────────────────────────
 print("Running Experiment 1: RMSE vs SNR ...")
 res_snr = {"das": [], "mvdr": [], "music": []}
 for snr in SNR_RANGE:
@@ -81,6 +91,8 @@ for snr in SNR_RANGE:
     res_snr["music"].append(mu)
     print(f"  SNR={snr:+3d} dB → DaS={d:.3f}°  MVDR={m:.3f}°  MUSIC={mu:.3f}°")
 
+
+# ── Experiment 2: RMSE vs N_snapshots ─────────────────────────────────────
 print("\nRunning Experiment 2: RMSE vs N_snapshots ...")
 res_snap = {"das": [], "mvdr": [], "music": []}
 for ns in SNAPSHOTS_RANGE:
@@ -90,6 +102,8 @@ for ns in SNAPSHOTS_RANGE:
     res_snap["music"].append(mu)
     print(f"  N_snapshots={ns:4d} → DaS={d:.3f}°  MVDR={m:.3f}°  MUSIC={mu:.3f}°")
 
+
+# ── Figure 1: Stress-test plots ────────────────────────────────────────────
 fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 fig.suptitle("Stress Testing: RMSE Comparison", fontsize=14, fontweight="bold")
 
@@ -121,6 +135,8 @@ plt.tight_layout()
 fig.savefig("stress_test_rmse.png", dpi=150, bbox_inches="tight")
 print("\nSaved: stress_test_rmse.png")
 
+
+# ── Figure 2: Example spectra for one scenario ────────────────────────────
 sim = ULASimulator(M=M, fc=fc)
 bf  = Beamformer(sim)
 X, _, _ = sim.generate_signal(TRUE_THETAS, snr_db=FIXED_SNR, n_snapshots=FIXED_SNAPSHOTS)
@@ -164,9 +180,11 @@ print("Saved: spectra_comparison.png")
 
 print("\nAll done.")
 
+
+# ── Figure 3: Spectra across SNR levels ───────────────────────────────────
 print("\nGenerating Figure 3: Spatial spectra at varying SNR levels ...")
 
-SNR_VISUAL = [-10, 0, 10, 20]
+SNR_VISUAL = [-10, 0, 10, 20]   # representative SNR levels for visual comparison
 N_SNAP_VIS = FIXED_SNAPSHOTS
 
 fig3, axes3 = plt.subplots(len(SNR_VISUAL), 3, figsize=(15, 4 * len(SNR_VISUAL)), sharex=True)
